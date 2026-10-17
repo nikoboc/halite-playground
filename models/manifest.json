@@ -1,0 +1,1 @@
+{"files":[{"name":"dict","bytes":21547748,"parts":[{"path":"models/dict-9066cb58.00.gz","gzBytes":11287290}]},{"name":"lm","bytes":182238464,"parts":[{"path":"models/lm-32ba2988.00.gz","gzBytes":46923620},{"path":"models/lm-32ba2988.01.gz","gzBytes":43729968}]},{"name":"hm","bytes":35564134,"parts":[{"path":"models/hm-b6b1422c.00.gz","gzBytes":31381217}]}]}

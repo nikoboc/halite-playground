@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halite エンジン確認（Web）</title>
+<style>
+  /* 色はここだけで決め、ダークモードでは差し替える */
+  /* Colours are defined only here and swapped for dark mode */
+  :root {
+    --bg: #f6f6f3;
+    --panel: #ffffff;
+    --text: #1d1d1f;
+    --muted: #6d6d73;
+    --border: #e3e3de;
+    --accent: #2f6fed;
+    --accent-soft: #e9f0ff;
+    --bar: #cddbfa;
+    --up: #17804a;
+    --down: #c2412f;
+    --user: #8a4fd6;
+    --error-bg: #fdecea;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141416;
+      --panel: #1d1d20;
+      --text: #ececef;
+      --muted: #9b9ba3;
+      --border: #313136;
+      --accent: #74a1ff;
+      --accent-soft: #212d47;
+      --bar: #33497a;
+      --up: #4cc38a;
+      --down: #ff8a78;
+      --user: #c39bff;
+      --error-bg: #3d1f1c;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.6 system-ui, "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
+  }
+  header, main { max-width: 1240px; margin: 0 auto; padding: 0 20px; }
+  header {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px;
+    padding-top: 20px; padding-bottom: 12px;
+  }
+  h1 { margin: 0; font-size: 20px; font-weight: 650; }
+  h1 span { color: var(--muted); font-weight: 400; }
+  h2 { margin: 0 0 8px; font-size: 13px; font-weight: 650; color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font-size: 12px; padding: 1px 8px; border-radius: 999px;
+    border: 1px solid var(--border); color: var(--muted);
+  }
+  .chip.on { color: var(--accent); border-color: var(--accent); }
+
+  main {
+    display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px;
+    padding-bottom: 40px;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+  label.field { display: block; font-size: 13px; font-weight: 650; color: var(--muted); margin-bottom: 6px; }
+  label.field small { font-weight: 400; margin-left: 6px; }
+  textarea, input[type=text], select {
+    width: 100%; font: inherit; color: inherit; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  }
+  /* iOS Safari は 16px 未満の入力欄に寄ると拡大するので、16px 以上にする */
+  /* iOS Safari zooms in on fields below 16px, so keep them at 16px or larger */
+  textarea, input[type=text] { font-size: 16px; }
+  textarea { resize: vertical; min-height: 84px; }
+  textarea:focus, input[type=text]:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  #input { font-size: 22px; padding: 10px 12px; }
+  .meta { display: flex; justify-content: space-between; gap: 12px; min-height: 24px; margin-top: 6px; color: var(--muted); font-size: 13px; }
+  .meta #reading { color: var(--text); font-size: 15px; }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th {
+    text-align: right; font-size: 12px; font-weight: 600; color: var(--muted);
+    padding: 4px 8px; border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  th.left, td.left { text-align: left; }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--bg); }
+  .badge {
+    display: inline-block; font-size: 11px; line-height: 1.5; padding: 0 5px; margin-left: 8px; vertical-align: 2px;
+    border: 1px solid var(--accent); border-radius: 4px; color: var(--accent);
+  }
+  tbody tr.selected { background: var(--accent-soft); }
+  td.rank { color: var(--muted); }
+  /* 狭い画面では候補を潰さず、表だけを横にスクロールさせる */
+  /* On narrow screens keep candidates readable and let only the table scroll sideways */
+  td.surface { font-size: 17px; white-space: normal; min-width: 12em; }
+  .seg + .seg { border-left: 1px solid var(--border); margin-left: 3px; padding-left: 3px; }
+  .seg.homophone { text-decoration: underline dotted var(--accent); text-underline-offset: 4px; }
+  .seg.user { color: var(--user); }
+  .seg.unknown { color: var(--muted); }
+  .up { color: var(--up); }
+  .down { color: var(--down); }
+  .muted { color: var(--muted); }
+  .note { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+  .empty { color: var(--muted); font-size: 14px; padding: 10px 0; }
+
+  .words { display: flex; flex-wrap: wrap; gap: 10px; }
+  .word { flex: 1 1 180px; max-width: 280px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+  .word .surface { font-size: 18px; }
+  .word .info { font-size: 12px; color: var(--muted); }
+  .choices { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+  .choice { display: grid; grid-template-columns: minmax(3em, auto) 1fr 3.6em; align-items: center; gap: 6px; font-size: 13px; }
+  .choice.chosen { font-weight: 650; color: var(--accent); }
+  .bar { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--bar); }
+  .choice.chosen .bar > div { background: var(--accent); }
+  .choice .pct { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .row { display: flex; align-items: center; gap: 8px; }
+  .row + .row { margin-top: 6px; }
+  .row label { flex: 1; }
+  button {
+    font: inherit; font-size: 13px; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 7px; padding: 4px 10px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  .buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  ul.list { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow-y: auto; font-size: 13px; }
+  ul.list li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--border); }
+  ul.list li button { padding: 0 6px; font-size: 12px; }
+  .add { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; margin-bottom: 8px; }
+  .add input { padding: 4px 8px; font-size: 16px; }
+  .help { margin: 0; padding-left: 18px; font-size: 12px; color: var(--muted); }
+  kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+  #error { display: none; background: var(--error-bg); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+
+  /* 読み込み中の画面 */
+  /* The loading screen */
+  #loading {
+    position: fixed; inset: 0; z-index: 10; background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    padding: 24px; text-align: center;
+  }
+  #loading h1 { font-size: 22px; }
+  #loading .progress { width: min(420px, 80vw); height: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 5px; overflow: hidden; }
+  #loading .progress > div { height: 100%; width: 0%; background: var(--accent); transition: width 0.15s; }
+  #loading #loading-status { color: var(--muted); font-size: 14px; min-height: 1.6em; }
+  #loading .note { max-width: 420px; }
+</style>
+  <script type="module" crossorigin src="/halite-playground/assets/index-0OB5us46.js"></script>
+</head>
+<body>
+<div id="loading">
+  <h1>Halite <span class="muted">エンジン確認</span></h1>
+  <div class="progress"><div id="loading-bar"></div></div>
+  <div id="loading-status">準備している…</div>
+  <p class="note">エンジン（wasm）とモデル（圧縮で約 130MB）をダウンロードし、すべてこの端末の中で変換する。外部には何も送信しない。モデルは端末にキャッシュされ、2 回目からはダウンロードしない</p>
+</div>
+<header>
+  <h1>Halite <span>エンジン確認</span></h1>
+  <div id="models" class="chips"></div>
+</header>
+<main>
+  <div class="stack">
+    <div id="error"></div>
+    <section class="panel">
+      <label class="field" for="doc">文書<small>確定した文章。次の変換で前の文脈として使われる（直接書き換えてもよい）</small></label>
+      <textarea id="doc" rows="3" spellcheck="false"></textarea>
+    </section>
+    <section class="panel">
+      <label class="field" for="input">読み<small>ひらがな、またはローマ字</small></label>
+      <input id="input" type="text" autocomplete="off" spellcheck="false" placeholder="きしゃのきしゃがきしゃできしゃした">
+      <div class="meta"><span id="reading"></span><span id="timing"></span></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th class="left">候補</th><th title="小さい順に並ぶ">順位のコスト</th><th>言語モデル</th><th>学習</th><th>同音語</th><th title="入力をここで区切るコスト">区切り</th><th title="打ちかけの語を補った文字数に応じたコスト">補完</th><th title="同音語判定モデルで並べ替える前の順位（変換・予測それぞれの中）">n-gram 順位</th>
+            </tr>
+          </thead>
+          <tbody id="candidates"></tbody>
+        </table>
+      </div>
+      <p class="note">変換と予測（<span class="badge">予測</span>）を混ぜ、選ばれそうな順に並べる。先頭の語・文節（<span class="badge">文節</span>）は入力の頭の部分だけで確定する候補で、良い変換の区切りの小さい順に並び、確定すると残りの読みを変換し続ける。コストは小さいほど良い（−500 × ln P。差 1,151 で確率 10 倍）。順位のコスト = 言語モデル（文書の直前の 2 語からつなぐ）− 学習 + 同音語（文書の語も見る）+ 区切り（後ろにほぼ決まった語が続くのに、ここで区切るコスト）+ 補完（打ちかけの語を補った 1 文字ごとに 400）。点線は同音語判定モデルが迷っている語（確率 90% 未満）、紫はユーザ辞書の語</p>
+    </section>
+    <section class="panel">
+      <h2 id="detail-title">選んだ候補の語</h2>
+      <div id="detail" class="words"><div class="empty">候補を選ぶと、語ごとの読み・単語コストと、同音語判定モデルの確率を表示する</div></div>
+    </section>
+  </div>
+
+  <aside class="stack">
+    <section class="panel">
+      <h2>設定</h2>
+      <div class="row"><label><input type="checkbox" id="learning"> 学習する</label></div>
+      <div class="row"><label><input type="checkbox" id="contextual"> 文脈つき学習</label></div>
+      <div class="row"><label><input type="checkbox" id="romaji" checked> ローマ字をかなにする</label></div>
+      <div class="row">
+        <label for="limit">候補の数</label>
+        <select id="limit" style="width: 80px"><option>5</option><option selected>10</option><option>20</option></select>
+      </div>
+      <p class="note">直前に確定した語: <span id="last">なし</span></p>
+      <div class="buttons">
+        <button id="reset-session" title="直前に確定した語を忘れる（入力欄を移ったときと同じ）">セッションをリセット</button>
+        <button id="clear-doc">文書を消す</button>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>学習の記録 <span id="learned-count" class="muted"></span></h2>
+      <ul id="learned" class="list"></ul>
+      <div class="buttons"><button id="clear-learning">学習を消す</button></div>
+    </section>
+    <section class="panel">
+      <h2>ユーザ辞書</h2>
+      <form id="add-word" class="add">
+        <input type="text" id="word-reading" placeholder="読み" required>
+        <input type="text" id="word-surface" placeholder="表記" required>
+        <button>追加</button>
+      </form>
+      <ul id="user-words" class="list"></ul>
+    </section>
+    <section class="panel">
+      <h2>操作</h2>
+      <ul class="help">
+        <li>候補のタップで選択、もう一度タップ（またはダブルクリック）で確定</li>
+        <li><kbd>↑</kbd><kbd>↓</kbd> または <kbd>Tab</kbd> で候補を選ぶ、<kbd>Enter</kbd> で確定</li>
+        <li><kbd>Esc</kbd> で読みを消す</li>
+        <li>読みが空のとき <kbd>Enter</kbd> で改行、<kbd>Backspace</kbd> で文書の最後の 1 文字を消す</li>
+        <li>確定すると学習され、文書に追加される（学習はこのページを開いている間だけ）</li>
+        <li>変換はすべてこの端末の中で行い、外部には何も送信しない</li>
+      </ul>
+    </section>
+  </aside>
+</main>
+
+</body>
+</html>
